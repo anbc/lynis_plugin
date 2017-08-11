@@ -1,0 +1,154 @@
+#!/bin/sh
+
+#########################################################################
+#
+#    * DO NOT REMOVE *
+#-----------------------------------------------------
+# PLUGIN_AUTHOR=___anbc_<anbingchun@163.com>___
+# PLUGIN_CATEGORY=category
+# PLUGIN_DESC=obtain_process_info
+# PLUGIN_NAME=process_check
+# PLUGIN_REQUIRED_TESTS=
+#-----------------------------------------------------
+#
+#########################################################################
+
+
+# get current running process info
+function get_process_info()
+{
+    IFS_OLD=$IFS
+    IFS=$'\n'
+    for process_line in `ps -auxh`;do
+        process_id=`echo ${process_line} | awk '{print $2} '`
+        process_file_path=`echo ${process_line}| awk '{print $11}'`
+        get_process_file $process_file_path;
+        process_info[$process_id]=$process_line
+    done
+
+    IFS=$IFS_OLD
+}
+
+#get the file infor about running process
+function get_process_file()
+{
+    file_path=$1
+    if [[ $file_path =~ ^[A-Za-z0-9]+ ]];
+    then 
+        file_name_no_path[${#file_name_no_path[@]}]=$file_path
+        compute_file_sha1_nopath $file_path;
+    elif [[ $file_path =~ ^/+ ]];
+    then
+        temp=`sha1sum ${file_path} `
+        file_sha1[${#file_sha1[@]}]=$temp
+        
+    #elif [[ $file_path =~ ^\[.*\] ]];
+    #then
+    #    file_name_kernel[${#file_name_kernel[@]}]=$file_path
+    #else
+    #    file_name_rest[${#file_name_rest[@]}]=$file_path
+    fi
+}
+
+
+#compute file sha1 which not have file path
+function compute_file_sha1_nopath()
+{
+    file_name=$1
+    len=${#file_name}
+    tail=${file_name:0-1:1}
+   
+    if [ "$tail"x = ":"x ];
+    then
+        file_name=${file_name:0:$len-1}
+    fi
+
+    process_path=`whereis ${file_name} `
+    
+    arr_info=`echo $process_path | cut -d " " -f 2 `
+
+    sha1_hash=`sha1sum ${arr_info} `
+
+    file_sha1_short[${#file_sha1_short[@]}]=$sha1_hash
+    process_whereis[${#process_whereis[@]}]=$process_path
+
+}
+
+
+function report_process_info()
+{
+
+    Display --indent 2 --text "ps output command info"
+    for item in "${process_info[@]}"
+    do
+        Report "process_info[]=$item"
+    done
+
+
+    Display --indent 2 --text  "process file path sha1 hash "
+    for item in "${file_sha1[@]}"  
+    do  
+        Report "process_file_sha1[]=$item"  
+    done
+
+
+    Display --indent 2 --text "process no path file sha1 hash"
+    for item in "${file_sha1_short[@]}"
+    do 
+        Report "process_short_file_sha1[]=$item"
+    done
+
+
+    #Display --indent 2 --text "process no path file whereis info"
+    #for item in "${process_whereis[@]}"
+    #do
+    #   Report "process_file_whereis[]=$item"
+    #done
+
+
+    #Display --indent 2 --text "process file name kernel"
+    #for item in "${file_name_kernel[@]}"
+    #do 
+    #   Report "process_file_kernel[]=$item"
+    #done
+
+    #Display --indent 2 --text "file_name_rest"
+    #for item in "${file_name_rest[@]}"
+    #do 
+    #    Report "process_file_rest[]=$item"
+    #done
+
+
+}
+
+
+
+
+
+#########################################################################
+#
+    # Add custom section to screen output
+    InsertSection "CUST Process Info Check Plugin"
+#
+#################################################################################
+#
+    # Test        : CUST-0001
+    # Description : 列举服务器中正在运行的进程，以及对应文件的信息
+
+    # Register our first custom test
+    # We consider it to be a lightweight test (no heavy IO, or long searches), no network connection needed
+    Register --test-no CUST-PROCESS-0001 --weight L --network NO --description "A test case for process infor and file infor from process"
+    if [ ${SKIPTEST} -eq 0 ];then
+        Display --indent 2 --text "-call get_process_info funciton"
+        get_process_info;
+        report_process_info;
+    fi  
+
+#
+##########################################################
+#
+
+# Wait for keypress (unless --quick is being used)
+wait_for_keypress
+
+#EOF
